@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+*/node_modules/
+*/*/node_modules/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+server/.env
+
+# Temporary and log files
+*.log
+npm-debug.log*
+New Text Document.txt
+server/New Text Document.txt
+server/server/
+
+# OS Files
+Thumbs.db
+.DS_Store

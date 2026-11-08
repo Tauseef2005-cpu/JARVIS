@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S. Terminal</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    
+    <!-- React & Babel CDNs -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        :root {
+            --cyan: #00d4ff;
+            --orange: #ff6b35;
+            --black: #000000;
+            --dark: #0a0e17;
+            --panel-bg: rgba(0, 15, 30, 0.6);
+            --font-header: 'Orbitron', sans-serif;
+            --font-term: 'Share Tech Mono', monospace;
+            --font-body: 'Rajdhani', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            scrollbar-width: thin;
+            scrollbar-color: var(--cyan) transparent;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--cyan);
+            border-radius: 3px;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--black);
+            color: var(--cyan);
+            font-family: var(--font-body);
+            overflow: hidden;
+        }
+
+        /* Particle Canvas */
+        #bg-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            opacity: 0.4;
+        }
+
+        /* Scanline Overlay */
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%, 
+                rgba(0, 0, 0, 0.25) 50%), 
+                linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 3px 100%;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        /* Corner Bracket Decorations */
+        .bracket {
+            position: fixed;
+            width: 50px;
+            height: 50px;
+            border: 2px solid var(--cyan);
+            z-index: 50;
+            pointer-events: none;
+            opacity: 0.7;
+        }
+        .bracket-tl { top: 20px; left: 20px; border-right: none; border-bottom: none; }
+        .bracket-tr { top: 20px; right: 20px; border-left: none; border-bottom: none; }
+        .bracket-bl { bottom: 20px; left: 20px; border-right: none; border-top: none; }
+        .bracket-br { bottom: 20px; right: 20px; border-left: none; border-top: none; }
+
+        /* App Container Grid */
+        #root {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 30px;
+            gap: 20px;
+        }
+
+        /* Top HUD Bar */
+        .top-hud {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 60px;
+            border-bottom: 2px solid rgba(0, 212, 255, 0.3);
+            padding-bottom: 15px;
+            text-transform: uppercase;
+        }
+
+        .logo-container {
+            font-family: var(--font-header);
+            font-size: 2.5rem;
+            font-weight: 900;
+            letter-spacing: 5px;
+            animation: text-pulse 3s infinite;
+        }
+
+        .hud-stats {
+            display: flex;
+            gap: 30px;
+            font-family: var(--font-term);
+            font-size: 1.2rem;
+            align-items: center;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            background-color: var(--cyan);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--cyan);
+            animation: blink 2s ease-in-out infinite;
+        }
+
+        /* 3-Column Layout */
+        .main-content {
+            display: flex;
+            flex: 1;
+            gap: 20px;
+            min-height: 0; /* for flex child scrolling */
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(0, 212, 255, 0.05);
+            position: relative;
+        }
+        
+        /* Corner small marks on panels */
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 15px; height: 15px;
+            border-top: 2px solid var(--cyan);
+            border-left: 2px solid var(--cyan);
+        }
+        .panel::after {
+            content: '';
+            position: absolute;
+            bottom: 0; right: 0;
+            width: 15px; height: 15px;
+            border-bottom: 2px solid var(--cyan);
+            border-right: 2px solid var(--cyan);
+        }
+
+        .left-panel, .right-panel {
+            width: 300px;
+            flex-shrink: 0;
+        }
+
+        .center-terminal {
+            flex: 1;
+        }
+
+        /* Titles for panels */
+        .panel-header {
+            font-family: var(--font-header);
+            font-size: 1rem;
+            padding: 10px 15px;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.3);
+            background: rgba(0, 212, 255, 0.1);
+            letter-spacing: 2px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Center Terminal specifics */
+        .output-area {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .input-row {
+            padding: 15px;
+            border-top: 1px solid rgba(0, 212, 255, 0.3);
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .terminal-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--cyan);
+            font-family: var(--font-term);
+            font-size: 1.2rem;
+            outline: none;
+        }
+
+        .terminal-input::placeholder {
+            color: rgba(0, 212, 255, 0.3);
+        }
+
+        .terminal-input:disabled {
+            opacity: 0.5;
+        }
+
+        .btn-execute {
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid var(--cyan);
+            color: var(--cyan);
+            font-family: var(--font-header);
+            padding: 8px 20px;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.3s;
+            letter-spacing: 1px;
+        }
+
+        .btn-execute:hover:not(:disabled) {
+            background: var(--cyan);
+            color: var(--black);
+            box-shadow: 0 0 15px var(--cyan);
+        }
+
+        .btn-execute:disabled {
+            border-color: rgba(0, 212, 255, 0.3);
+            color: rgba(0, 212, 255, 0.3);
+            cursor: not-allowed;
+        }
+
+        /* Message Styles */
+        .msg-block {
+            animation: fadeUp 0.3s ease-out forwards;
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        .msg-prefix {
+            font-family: var(--font-header);
+            font-weight: 700;
+            margin-right: 10px;
+            font-size: 0.9rem;
+        }
+
+        .msg-user {
+            color: var(--orange);
+            font-family: var(--font-term);
+            margin-bottom: 5px;
+        }
+
+        .msg-user .msg-prefix { color: var(--orange); text-shadow: 0 0 5px var(--orange); }
+
+        .msg-jarvis {
+            color: var(--cyan);
+            font-family: var(--font-body);
+            font-size: 1.15rem;
+            line-height: 1.5;
+            background: rgba(0, 212, 255, 0.05);
+            padding: 10px;
+            border-left: 3px solid var(--cyan);
+            white-space: pre-wrap;
+        }
+
+        .msg-jarvis .msg-prefix { color: var(--cyan); text-shadow: 0 0 5px var(--cyan); }
+
+        .error-msg {
+            color: #ff3333;
+            border-left-color: #ff3333;
+            background: rgba(255, 51, 51, 0.05);
+        }
+        .error-msg .msg-prefix { color: #ff3333; text-shadow: 0 0 5px #ff3333; }
+
+        /* Typing Dots */
+        .typing-indicator {
+            display: flex;
+            gap: 5px;
+            padding: 10px;
+            align-items: center;
+        }
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--cyan);
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        /* Suggestion Pills */
+        .suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .pill {
+            border: 1px solid rgba(0, 212, 255, 0.4);
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: var(--font-term);
+            background: rgba(0,0,0,0.5);
+        }
+        .pill:hover {
+            background: rgba(0, 212, 255, 0.2);
+            border-color: var(--cyan);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+        }
+
+        /* SVG Panels */
+        .svg-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 30px;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+        }
+
+        .capabilities {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .capabilities li {
+            padding: 12px 15px;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+            font-family: var(--font-term);
+            font-size: 0.9rem;
+            cursor: default;
+            transition: all 0.3s;
+        }
+        .capabilities li:hover {
+            background: rgba(0, 212, 255, 0.15);
+            text-shadow: 0 0 8px var(--cyan);
+            padding-left: 20px;
+            border-left: 3px solid var(--cyan);
+        }
+
+        .sys-logs {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            font-family: var(--font-term);
+            font-size: 0.8rem;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .log-entry {
+            border-left: 2px solid var(--cyan);
+            padding-left: 8px;
+            opacity: 0.8;
+            animation: fadeIn 0.3s;
+        }
+        .log-time { color: var(--orange); margin-right: 5px; }
+
+        /* Config Modal */
+        .modal-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(10px);
+        }
+        .config-box {
+            background: var(--dark);
+            border: 2px solid var(--cyan);
+            padding: 30px;
+            width: 500px;
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.2);
+            font-family: var(--font-term);
+        }
+        .config-box h2 {
+            font-family: var(--font-header);
+            margin-top: 0;
+            text-align: center;
+            text-shadow: 0 0 10px var(--cyan);
+            border-bottom: 1px solid var(--cyan);
+            padding-bottom: 10px;
+        }
+        .config-group { margin-bottom: 20px; }
+        .config-group label { display: block; margin-bottom: 5px; color: var(--orange); }
+        .config-input {
+            width: 100%;
+            padding: 10px;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid rgba(0, 212, 255, 0.5);
+            color: var(--cyan);
+            font-family: var(--font-term);
+            outline: none;
+        }
+        .config-input:focus { border-color: var(--cyan); box-shadow: 0 0 10px rgba(0, 212, 255, 0.3); }
+        .config-btn {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid var(--cyan);
+            color: var(--cyan);
+            font-family: var(--font-header);
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .config-btn:hover { background: var(--cyan); color: var(--black); box-shadow: 0 0 20px var(--cyan); }
+
+        /* Animations */
+        @keyframes text-pulse {
+            0%, 100% { text-shadow: 0 0 10px var(--cyan), 0 0 20px var(--cyan); }
+            50% { text-shadow: 0 0 20px var(--cyan), 0 0 40px var(--cyan), 0 0 60px var(--cyan); }
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes radar-blip {
+            0% { opacity: 0; transform: scale(0); }
+            10% { opacity: 1; transform: scale(1); box-shadow: 0 0 10px var(--cyan); }
+            100% { opacity: 0; transform: scale(3); }
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .left-panel { display: none; }
+        }
+        @media (max-width: 800px) {
+            .right-panel { display: none; }
+            .bracket { display: none; }
+            #root { padding: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="bg-canvas"></canvas>
+    <div class="scanlines"></div>
+    
+    <div class="bracket bracket-tl"></div>
+    <div class="bracket bracket-tr"></div>
+    <div class="bracket bracket-bl"></div>
+    <div class="bracket bracket-br"></div>
+
+    <div id="root"></div>
+
+    <!-- Particle Background Script -->
+    <script>
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let width, height;
+        let particles = [];
+        
+        function init() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            particles = [];
+            for(let i=0; i<60; i++) {
+                particles.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5
+                });
+            }
+        }
+        
+        function draw() {
+            ctx.clearRect(0, 0, width, height);
+            ctx.fillStyle = '#00d4ff';
+            ctx.strokeStyle = 'rgba(0, 212, 255, 0.15)';
+            
+            for(let i=0; i<particles.length; i++) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                
+                if(p.x < 0 || p.x > width) p.vx *= -1;
+                if(p.y < 0 || p.y > height) p.vy *= -1;
+                
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+                
+                for(let j=i+1; j<particles.length; j++) {
+                    let p2 = particles[j];
+                    let dx = p.x - p2.x;
+                    let dy = p.y - p2.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    if(dist < 120) {
+                        ctx.beginPath();
+                        ctx.strokeStyle = `rgba(0, 212, 255, ${0.2 - dist/600})`;
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(draw);
+        }
+        
+        window.addEventListener('resize', init);
+        init();
+        draw();
+    </script>
+
+    <!-- React Application -->
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Custom Hook for Typewriter effect
+        const TypewriterMessage = ({ text, onComplete }) => {
+            const [displayedText, setDisplayedText] = useState("");
+            
+            useEffect(() => {
+                let i = 0;
+                setDisplayedText("");
+                const interval = setInterval(() => {
+                    const nextChar = text[i];
+                    if (nextChar !== undefined) {
+                        setDisplayedText(prev => prev + nextChar);
+                        i++;
+                    } else {
+                        clearInterval(interval);
+                        if(onComplete) onComplete();
+                    }
+                }, 15); // ms per char
+                
+                return () => clearInterval(interval);
+            }, [text]);
+
+            return <span>{displayedText}</span>;
+        };
+
+        const App = () => {
+            const [configOpen, setConfigOpen] = useState(false);
+            
+            const [history, setHistory] = useState([]);
+            const [input, setInput] = useState("");
+            const [isProcessing, setIsProcessing] = useState(false);
+            const [sysLogs, setSysLogs] = useState([]);
+            
+            const [queryCount, setQueryCount] = useState(0);
+            const [time, setTime] = useState(new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+            
+            const outputRef = useRef(null);
+            const logRef = useRef(null);
+
+            // Clock
+            useEffect(() => {
+                const timer = setInterval(() => setTime(new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })), 1000);
+                return () => clearInterval(timer);
+            }, []);
+
+            // Initial load
+            useEffect(() => {
+                addLog("SYSTEM INITIALIZED.");
+                addLog("AWAITING USER INPUT.");
+            }, []);
+
+            // Auto scroll main output
+            useEffect(() => {
+                if (outputRef.current) {
+                    outputRef.current.scrollTop = outputRef.current.scrollHeight;
+                }
+            }, [history, isProcessing]);
+
+            // Auto scroll logs
+            useEffect(() => {
+                if (logRef.current) {
+                    logRef.current.scrollTop = logRef.current.scrollHeight;
+                }
+            }, [sysLogs]);
+
+            const addLog = (msg) => {
+                const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                setSysLogs(prev => [...prev, { time: ts, msg }]);
+            };
+
+            const closeConfig = (e) => {
+                if (e) e.preventDefault();
+                setConfigOpen(false);
+            };
+
+            const handleSend = async () => {
+                if (!input.trim() || isProcessing) return;
+
+                const displayInput = input;
+                
+                setInput("");
+                setHistory(prev => [...prev, { role: "user", text: displayInput }]);
+                setIsProcessing(true);
+                setQueryCount(prev => prev + 1);
+                addLog(`PROCESSING QUERY [${queryCount + 1}]...`);
+
+                try {
+                    addLog("CONNECTING TO JARVIS CORE...");
+
+                    const response = await fetch("http://localhost:3000/chat", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            messages: [
+                                ...history.map(h => ({
+                                    role: h.role === "assistant" ? "assistant" : "user",
+                                    content: h.text
+                                })),
+                                { role: "user", content: displayInput }
+                            ]
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    const assistantText = data?.choices?.[0]?.message?.content || "No response";
+
+                    setHistory(prev => [
+                        ...prev,
+                        { role: "assistant", text: assistantText, typing: true }
+                    ]);
+
+                    addLog("RESPONSE GENERATED SUCCESSFULLY.");
+
+                } catch (error) {
+                    console.error(error);
+                    addLog("CRITICAL ERROR IN TRANSMISSION.");
+                    setHistory(prev => [...prev, { role: "error", text: error.message }]);
+                } finally {
+                    setIsProcessing(false);
+                }
+            };
+
+            const markTypingComplete = (index) => {
+                setHistory(prev => {
+                    const newHist = [...prev];
+                    if (newHist[index]) newHist[index].typing = false;
+                    return newHist;
+                });
+            };
+
+            const suggestions = [
+                "Run diagnostic check on local systems",
+                "Explain the mechanics of Quantum Tunneling",
+                "Draft a Python script to scan active network ports",
+                "What is my itinerary for today?"
+            ];
+
+            return (
+                <React.Fragment>
+                    {/* Top HUD */}
+                    <div className="top-hud">
+                        <div className="logo-container">J.A.R.V.I.S.</div>
+                        <div className="hud-stats">
+                            <div>QUERY CNT // {queryCount.toString().padStart(4, '0')}</div>
+                            <div>SYS.TIME // {time}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                STATUS // ONLINE <div className="status-dot"></div>
+                            </div>
+                            <button onClick={() => setConfigOpen(true)} className="btn-execute" style={{ padding: '4px 10px', fontSize: '0.9rem' }}>CONFIG</button>
+                        </div>
+                    </div>
+
+                    <div className="main-content">
+                        {/* Left Panel */}
+                        <div className="panel left-panel">
+                            <div className="panel-header">ARC REACTOR [CAPABILITIES]</div>
+                            <div className="svg-container">
+                                <svg width="180" height="180" viewBox="0 0 200 200">
+                                    <defs>
+                                        <filter id="glow">
+                                            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                            <feMerge>
+                                                <feMergeNode in="coloredBlur"/>
+                                                <feMergeNode in="SourceGraphic"/>
+                                            </feMerge>
+                                        </filter>
+                                    </defs>
+                                    {/* Core */}
+                                    <circle cx="100" cy="100" r="20" fill="#00d4ff" filter="url(#glow)">
+                                        <animate attributeName="opacity" values="0.8;1;0.8" dur="2s" repeatCount="indefinite" />
+                                    </circle>
+                                    {/* Orbital rings */}
+                                    <g filter="url(#glow)" fill="none" stroke="#00d4ff" strokeWidth="2">
+                                        <circle cx="100" cy="100" r="45" strokeDasharray="10 5">
+                                            <animateTransform attributeName="transform" type="rotate" from="0 100 100" to="360 100 100" dur="8s" repeatCount="indefinite" />
+                                        </circle>
+                                        <circle cx="100" cy="100" r="65" strokeDasharray="30 20 10">
+                                            <animateTransform attributeName="transform" type="rotate" from="360 100 100" to="0 100 100" dur="12s" repeatCount="indefinite" />
+                                        </circle>
+                                        <circle cx="100" cy="100" r="85" strokeWidth="1" strokeDasharray="5 15">
+                                            <animateTransform attributeName="transform" type="rotate" from="0 100 100" to="360 100 100" dur="20s" repeatCount="indefinite" />
+                                        </circle>
+                                    </g>
+                                    {/* Dots */}
+                                    <g fill="#00d4ff">
+                                        <circle cx="100" cy="15" r="4">
+                                            <animateTransform attributeName="transform" type="rotate" from="0 100 100" to="360 100 100" dur="6s" repeatCount="indefinite" />
+                                        </circle>
+                                        <circle cx="100" cy="35" r="3">
+                                            <animateTransform attributeName="transform" type="rotate" from="360 100 100" to="0 100 100" dur="4s" repeatCount="indefinite" />
+                                        </circle>
+                                    </g>
+                                </svg>
+                            </div>
+                            <ul className="capabilities">
+                                <li>[+] CLAUDE 3.5 NEURAL NET</li>
+                                <li>[+] CODE GENERATION</li>
+                                <li>[+] ADVANCED MATHEMATICS</li>
+                                <li>[+] STRATEGIC PLANNING</li>
+                                <li>[+] SYSTEM DEBUGGING</li>
+                                <li>[+] SECURITY ANALYTICS</li>
+                                <li>[+] PATTERN RECOGNITION</li>
+                                <li>[+] GLOBAL DB ACCESS</li>
+                            </ul>
+                        </div>
+
+                        {/* Center Terminal */}
+                        <div className="panel center-terminal">
+                            <div className="panel-header">MAIN TERMINAL INTERFACE // SECURE CONNECTION</div>
+                            <div className="output-area" ref={outputRef}>
+                                {history.length === 0 && (
+                                    <div style={{ color: 'rgba(0,212,255,0.7)', paddingBottom: '20px' }}>
+                                        <div style={{ fontFamily: 'var(--font-header)', fontSize: '1.2rem', marginBottom: '10px' }}>SYSTEM READY. AWAITING COMMANDS.</div>
+                                        <div className="suggestions">
+                                            {suggestions.map((s, i) => (
+                                                <div key={i} className="pill" onClick={() => setInput(s)}>{s}</div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {history.map((msg, index) => (
+                                    <div key={index} className={`msg-block ${msg.role === 'error' ? 'error-msg' : ''}`}>
+                                        {msg.role === 'user' && (
+                                            <div className="msg-user">
+                                                <span className="msg-prefix">STARK ▶</span>
+                                                {msg.text}
+                                            </div>
+                                        )}
+                                        {msg.role === 'assistant' && (
+                                            <div className="msg-jarvis">
+                                                <span className="msg-prefix">JARVIS ▶</span>
+                                                {msg.typing ? 
+                                                    <TypewriterMessage text={msg.text} onComplete={() => markTypingComplete(index)} /> 
+                                                    : msg.text
+                                                }
+                                            </div>
+                                        )}
+                                        {msg.role === 'error' && (
+                                            <div className="msg-jarvis error-msg" style={{ background: 'transparent' }}>
+                                                <span className="msg-prefix">SYSTEM ERR ▶</span>
+                                                {msg.text}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+
+                                {isProcessing && (
+                                    <div className="typing-indicator msg-block">
+                                        <span className="msg-prefix" style={{ color: 'var(--cyan)' }}>JARVIS ▶</span>
+                                        <div className="typing-dot"></div>
+                                        <div className="typing-dot"></div>
+                                        <div className="typing-dot"></div>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="input-row">
+                                <span style={{ color: 'var(--orange)', fontFamily: 'var(--font-term)', fontWeight: 'bold' }}>STARK ▶</span>
+                                <input 
+                                    type="text" 
+                                    className="terminal-input"
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                                    placeholder="Enter command directive..."
+                                    disabled={isProcessing}
+                                    autoFocus
+                                />
+                                <button 
+                                    className="btn-execute" 
+                                    onClick={handleSend}
+                                    disabled={isProcessing || !input.trim()}
+                                >
+                                    EXECUTE
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Right Panel */}
+                        <div className="panel right-panel">
+                            <div className="panel-header">LIVE RADAR & SYSLOG</div>
+                            <div className="svg-container">
+                                <svg width="180" height="180" viewBox="0 0 200 200">
+                                    <defs>
+                                        <radialGradient id="fade" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                                            <stop offset="0%" stopColor="rgba(0,212,255,0.8)" />
+                                            <stop offset="100%" stopColor="rgba(0,212,255,0)" />
+                                        </radialGradient>
+                                        <clipPath id="radar-clip">
+                                            <circle cx="100" cy="100" r="90" />
+                                        </clipPath>
+                                    </defs>
+                                    {/* Grid */}
+                                    <circle cx="100" cy="100" r="90" fill="none" stroke="rgba(0,212,255,0.2)" strokeWidth="1" />
+                                    <circle cx="100" cy="100" r="60" fill="none" stroke="rgba(0,212,255,0.2)" strokeWidth="1" />
+                                    <circle cx="100" cy="100" r="30" fill="none" stroke="rgba(0,212,255,0.2)" strokeWidth="1" />
+                                    <line x1="10" y1="100" x2="190" y2="100" stroke="rgba(0,212,255,0.2)" />
+                                    <line x1="100" y1="10" x2="100" y2="190" stroke="rgba(0,212,255,0.2)" />
+                                    
+                                    {/* Rotating Sweep */}
+                                    <g>
+                                        <animateTransform attributeName="transform" type="rotate" from="0 100 100" to="360 100 100" dur="4s" repeatCount="indefinite" />
+                                        <path d="M 100 100 L 100 10 A 90 90 0 0 1 190 100 Z" fill="url(#fade)" style={{ opacity: 0.4 }} clipPath="url(#radar-clip)" />
+                                        <line x1="100" y1="100" x2="100" y2="10" stroke="#00d4ff" strokeWidth="2" />
+                                    </g>
+
+                                    {/* Blips */}
+                                    <circle cx="140" cy="60" r="4" fill="#ff6b35" style={{ animation: 'radar-blip 4s infinite 0.5s' }} />
+                                    <circle cx="60" cy="130" r="3" fill="#ff6b35" style={{ animation: 'radar-blip 4s infinite 2.2s' }} />
+                                    <circle cx="150" cy="150" r="5" fill="#ff6b35" style={{ animation: 'radar-blip 4s infinite 3.5s' }} />
+                                    <circle cx="40" cy="70" r="3.5" fill="#ff6b35" style={{ animation: 'radar-blip 4s infinite 1.2s' }} />
+                                </svg>
+                            </div>
+                            <div className="sys-logs" ref={logRef}>
+                                {sysLogs.map((log, i) => (
+                                    <div key={i} className="log-entry">
+                                        <span className="log-time">[{log.time}]</span>
+                                        {log.msg}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Config Modal */}
+                    {configOpen && (
+                        <div className="modal-overlay">
+                            <div className="config-box">
+                                <h2>SYSTEM CONFIGURATION</h2>
+                                <form onSubmit={closeConfig}>
+                                    <div className="config-group">
+                                        <label>Backend Connected</label>
+                                        <input 
+                                            type="text" 
+                                            className="config-input" 
+                                            value="http://localhost:3000/chat" 
+                                            disabled
+                                        />
+                                    </div>
+                                    <p style={{ fontSize: '0.8rem', color: 'rgba(0,212,255,0.6)', marginTop: '-10px', marginBottom: '20px' }}>
+                                        System directly routed to JARVIS Local Core. External APIs and Proxy configurations have been removed for direct secure socket interaction.
+                                    </p>
+                                    <button type="submit" className="config-btn">CLOSE SYSTEM CONFIG</button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </React.Fragment>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
