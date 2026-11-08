@@ -1,4 +1,11 @@
 {
+  "name": "jarvis-server",
+  "version": "1.0.0",
+  "description": "J.A.R.V.I.S. backend core",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

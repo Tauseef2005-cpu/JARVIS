@@ -44,12 +44,16 @@ OPENROUTER_API_KEY=your_openrouter_api_key_here
 ```
 
 ### 3. Launching Jarvis
+#### Option A: One-Click (Windows)
+Simply double-click `start.bat` in the project root. It will start the server and automatically open the terminal in your browser.
+
+#### Option B: Terminal Command
 From the `server` directory:
 ```bash
-node server.js
+npm start
 ```
 
-Open your browser and navigate to:
+Then open your browser and navigate to:
 ```
 http://localhost:3000
 ```
