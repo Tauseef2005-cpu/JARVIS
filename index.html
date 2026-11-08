@@ -665,7 +665,14 @@
 
                     const data = await response.json();
 
-                    const assistantText = data?.choices?.[0]?.message?.content || "No response";
+                    let assistantText = data?.choices?.[0]?.message?.content;
+                    if (!assistantText) {
+                        if (data?.error?.message) {
+                            assistantText = `[API ERROR]: ${data.error.message}`;
+                        } else {
+                            assistantText = "No response from AI core. Please verify your OPENROUTER_API_KEY in server/.env and restart the server.";
+                        }
+                    }
 
                     setHistory(prev => [
                         ...prev,
